@@ -2357,7 +2357,9 @@ function renderWizardStage(){
       html+='<label>'+escHtml(f.label)+'</label>';
       if(f.type==='select'){
         html+='<select class="wizard-input" data-field="'+escAttr(f.id)+'">';
-        (f.options||[]).forEach(function(o){html+='<option value="'+escAttr(o)+'">'+escHtml(o)+'</option>';});
+        var wOpts=f.options||[];
+        var wDefault=f.value||wOpts[0]||'';
+        wOpts.forEach(function(o){html+='<option value="'+escAttr(o)+'"'+(o===wDefault?' selected':'')+'>'+escHtml(o)+'</option>';});
         html+='</select>';
       } else {
         html+='<input type="text" class="wizard-input" data-field="'+escAttr(f.id)+'" placeholder="'+escAttr(f.placeholder||'')+'" value="'+escAttr(f.value||'')+'">';
@@ -2365,7 +2367,11 @@ function renderWizardStage(){
       html+='</div>';
     });
     html+='</div>';
-    var formData=getWizardFormData();
+    var formData={};
+    stage.form.forEach(function(f){
+      if(f.type==='select') formData[f.id]=f.value||(f.options&&f.options[0])||'';
+      else formData[f.id]=f.value||'';
+    });
     var output=stage.outputTemplate?stage.outputTemplate(formData):'';
     html+='<div class="output-block" id="wizardOutput"><button class="copy-btn" data-cmd="'+escAttr(output)+'" style="color:var(--text-secondary)">Copy All</button>'+escHtml(output)+'</div>';
   }
@@ -2425,7 +2431,9 @@ function loadBuilder(id){
     html+='<label>'+escHtml(f.label)+'</label>';
     if(f.type==='select'){
       html+='<select class="builder-input" data-field="'+escAttr(f.id)+'">';
-      (f.options||[]).forEach(function(o){html+='<option value="'+escAttr(o)+'">'+escHtml(o)+'</option>';});
+      var selOpts=f.options||[];
+      var selDefault=f.value||selOpts[0]||'';
+      selOpts.forEach(function(o){html+='<option value="'+escAttr(o)+'"'+(o===selDefault?' selected':'')+'>'+escHtml(o)+'</option>';});
       html+='</select>';
     } else {
       html+='<input type="text" class="builder-input" data-field="'+escAttr(f.id)+'" placeholder="'+escAttr(f.placeholder||'')+'" value="'+escAttr(f.value||'')+'">';
@@ -2433,7 +2441,10 @@ function loadBuilder(id){
     html+='</div>';
   });
   html+='</div>';
-  var data={};builder.fields.forEach(function(f){data[f.id]=f.value||'';});
+  var data={};builder.fields.forEach(function(f){
+    if(f.type==='select') data[f.id]=f.value||(f.options&&f.options[0])||'';
+    else data[f.id]=f.value||'';
+  });
   var output=builder.generate(data);
   html+='<div class="output-block" id="builderOutput"><button class="copy-btn" data-cmd="'+escAttr(output)+'" style="color:var(--text-secondary)">Copy All</button>'+escHtml(output)+'</div>';
   html+='</div>';
