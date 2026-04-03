@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Grandizer v4 | Windows PrivEsc Wizard | OSCP+ | ADCS+ | AD+</title>
+<title>Grandizer | Windows PrivEsc Wizard</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -2520,7 +2520,7 @@ function loadState(){
    QUICK WINS TAB
    ══════════════════════════════════════════════════ */
 function initQuickWins(){
-  var html='<h2 style="margin-bottom:4px">\u26a1 Quick Wins \u2014 OSCP Time Pressure Mode</h2><p class="text-sm text-muted mb-12">16 checks ordered fastest-to-exploit. Run each confirm command, paste output, get instant traffic-light result.</p>';
+  var html='<h2 style="margin-bottom:4px">\u26a1 Quick Wins  Time Pressure Mode</h2><p class="text-sm text-muted mb-12">16 checks ordered fastest-to-exploit. Run each confirm command, paste output, get instant traffic-light result.</p>';
   QUICK_WINS.forEach(function(qw){
     html+='<div class="qw-card" data-qw-rank="'+qw.rank+'">';
     html+='<div class="qw-header"><div class="qw-rank">'+qw.rank+'</div><div><div class="card-title">'+escHtml(qw.name)+'</div><div class="text-xs text-muted">\u23f1 '+escHtml(qw.time)+' \u2014 '+escHtml(qw.tip)+'</div></div></div>';
